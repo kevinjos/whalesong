@@ -19,10 +19,13 @@ LOG.setLevel(logging.INFO)
 class Location(object):
     OSL = "orcasoundlab"
     PTE = "porttownsend"
+    LK = "limekiln"
     URL = {OSL: "http://208.80.53.110:17636",
-           PTE: "http://sc3.spacialnet.com:16948"}
+           PTE: "http://sc3.spacialnet.com:16948",
+           LK: "http://ice.stream101.com:8047"}
     STOP = {OSL: "oslstop",
-            PTE: "ptestop"}
+            PTE: "ptestop",
+            LK: "lkstop"}
 
     @classmethod
     def get_url(self, location):
@@ -35,7 +38,7 @@ class Location(object):
 
 class Recording(object):
 
-    FN = "data/{loc}_{date}_{secs}_{i}.{ft}"
+    FN = "data/{date}_{starttime}_{loc}_{secs}.{ft}"
     TRUEAUDIOTHRESHOLD = 5
 
     def __init__(self, samplerate, chans, location):
@@ -45,15 +48,14 @@ class Recording(object):
         self.url = Location.get_url(location)
         self.stop_file = Location.get_stop_file(location)
         self.wav_data = deque([], 2)
-        self.seq_num = 0
 
     def set_file_name(self):
-        date = dt.date.today().strftime("%Y-%m-%d")
-        fn = self.FN.format(loc=self.location, date=date, secs=SECS, i=str(self.seq_num).rjust(3, "0"), ft="{ft}")
+        date = dt.date.today().strftime("%y%m%d")
+        starttime = dt.datetime.today().strftime("%H%M%S")
+        fn = self.FN.format(loc=self.location, date=date, starttime=starttime, secs=SECS, ft="{ft}")
         self.fn_mp3 = fn.format(ft="mp3")
         self.fn_wav = fn.format(ft="wav")
         self.fn_cue = fn.format(ft="cue")
-        self.seq_num += 1
 
     def set_wav_data(self):
         rate, data = wavfile.read(self.fn_wav)
@@ -188,6 +190,8 @@ async def stream_handel(recording, pool):
         A = SeqAlign(recording)
         res = pool.apply_async(do_align, (A, ))
         if os.path.isfile(recording.stop_file):
+            LOG.info("Found stopfile=[%s], stopping" % recording.stop_file)
+            subprocess.call(["rm", recording.stop_file], stdout=DEVNULL, stderr=DEVNULL)
             ok = False
     LOG.info("Stopping stream handler for [%s]" % recording.location)
 
@@ -199,13 +203,15 @@ def main():
     LOG.addHandler(ch)
 
     OrcaSoundLab = Recording(44100, 1, Location.OSL)
+    LimeKiln = Recording(22050, 1, Location.LK)
     PortTownsend = Recording(22050, 2, Location.PTE)
 
     loop = asyncio.get_event_loop()
-    with Pool(processes=4) as pool:
+    with Pool(processes=6) as pool:
         tasks = [
             asyncio.ensure_future(stream_handel(PortTownsend, pool)),
-            asyncio.ensure_future(stream_handel(OrcaSoundLab, pool))]
+            asyncio.ensure_future(stream_handel(OrcaSoundLab, pool)),
+            asyncio.ensure_future(stream_handel(LimeKiln, pool))]
         loop.run_until_complete(asyncio.wait(tasks))
     loop.close()
 

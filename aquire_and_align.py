@@ -11,7 +11,7 @@ import subprocess
 from subprocess import PIPE, DEVNULL
 
 
-SECS = "600"
+SECS = "1200"
 LOG = logging.getLogger("aquire_and_align")
 LOG.setLevel(logging.INFO)
 
@@ -62,7 +62,8 @@ class Recording(object):
     def set_wav_data(self):
         rate, data = wavfile.read(self.fn_wav)
         if rate != self.samplerate:
-            raise RuntimeError("wav file sample rate [%s] != predefined sample rate [%s] for [%s]" % (rate, self.samplerate, self.location))
+            self.samplerate = rate
+            LOG.error("wav file sample rate [%s] != predefined sample rate [%s] for [%s]" % (rate, self.samplerate, self.location))
         LOG.debug("Data len=[%s] BEFORE truncate" % len(data))
         data = self.truncate_data_(data)
         LOG.debug("Data len=[%s] AFTER truncate" % len(data))
@@ -177,46 +178,52 @@ def capture_stream(recording):
     p = subprocess.Popen(["streamripper", recording.url, "-i", "--xs-none", "-l", SECS, "-a", recording.fn_mp3], stdout=DEVNULL, stderr=PIPE)
     _, stderr = p.communicate()
     if stderr != b'':
-        LOG.error(stderr)
+        LOG.error("[%s] [streamripper]: %s" % (recording.location, stderr.decode()))
+        return 1
     p = subprocess.Popen(["mpg123", "-w", recording.fn_wav, recording.fn_mp3], stdout=DEVNULL, stderr=PIPE)
     _, stderr = p.communicate()
     if stderr != b'' and stderr.find(MPG123STDERR) == -1:
-        LOG.error(stderr)
+        LOG.error("[%s] [mpg123]: %s" % (recording.location, stderr.decode()))
+        return 2
     p = subprocess.Popen(["rm", recording.fn_mp3, recording.fn_cue], stdout=DEVNULL, stderr=PIPE)
     _, stderr = p.communicate()
     if stderr != b'':
-        LOG.error(stderr)
+        LOG.error("[%s] [rm]: %s" % (recording.location, stderr.decode()))
+        return 3
+    return 0
 
 
 async def stream_handel(recording, pool):
     LOG.info("Initializing stream handler for [%s]" % recording.location)
     ok = True
     while ok:
-        recording.set_file_name()
-        res = pool.apply_async(capture_stream, (recording, ))
-        await asyncio.sleep(5)
-        res.get()
-        try:
-            recording.set_wav_data()
-        except RuntimeError as e:
-            LOG.error(e)
-            continue
-        LOG.info("Aligning current and previous wav files for [%s]" % recording.location)
-        A = SeqAlign(recording)
-        res = pool.apply_async(do_align, (A, ))
         if os.path.isfile(recording.stop_file):
             LOG.info("Found stopfile=[%s], stopping" % recording.stop_file)
             subprocess.call(["rm", recording.stop_file], stdout=DEVNULL, stderr=DEVNULL)
             ok = False
+            continue
+        recording.set_file_name()
+        res = pool.apply_async(capture_stream, (recording, ))
+        await asyncio.sleep(5)
+        retcode = res.get()
+        if retcode > 0:
+            continue
+        recording.set_wav_data()
+        LOG.info("Aligning current and previous wav files for [%s]" % recording.location)
+        A = SeqAlign(recording)
+        res = pool.apply_async(do_align, (A, ))
     LOG.info("Stopping stream handler for [%s]" % recording.location)
 
 
-def main():
+def init():
     formatter = logging.Formatter('[%(asctime)s] - [%(name)s] - [%(levelname)s] - %(message)s')
     fh = logging.FileHandler("log/aquire_and_align.log")
     fh.setFormatter(formatter)
     LOG.addHandler(fh)
 
+
+def main():
+    init()
     OrcaSoundLab = Recording(44100, 1, Location.OSL)
     LimeKiln = Recording(22050, 1, Location.LK)
     PortTownsend = Recording(22050, 2, Location.PTE)

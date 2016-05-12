@@ -193,7 +193,11 @@ def capture_stream(recording):
     return 0
 
 
-async def stream_handel(recording, pool):
+async def release_lock():
+    await asyncio.sleep(1)
+
+
+async def stream_handle(recording, pool):
     LOG.info("Initializing stream handler for [%s]" % recording.location)
     ok = True
     while ok:
@@ -204,7 +208,8 @@ async def stream_handel(recording, pool):
             continue
         recording.set_file_name()
         res = pool.apply_async(capture_stream, (recording, ))
-        await asyncio.sleep(5)
+        while not res.ready():
+            await release_lock()
         retcode = res.get()
         if retcode > 0:
             continue
@@ -219,6 +224,9 @@ def init():
     formatter = logging.Formatter('[%(asctime)s] - [%(name)s] - [%(levelname)s] - %(message)s')
     fh = logging.FileHandler("log/aquire_and_align.log")
     fh.setFormatter(formatter)
+    # sh = logging.StreamHandler()
+    # sh.setFormatter(formatter)
+    # LOG.addHandler(sh)
     LOG.addHandler(fh)
 
 
@@ -231,9 +239,9 @@ def main():
     loop = asyncio.get_event_loop()
     with Pool(processes=6) as pool:
         tasks = [
-            asyncio.ensure_future(stream_handel(PortTownsend, pool)),
-            asyncio.ensure_future(stream_handel(OrcaSoundLab, pool)),
-            asyncio.ensure_future(stream_handel(LimeKiln, pool))]
+            asyncio.ensure_future(stream_handle(PortTownsend, pool)),
+            asyncio.ensure_future(stream_handle(OrcaSoundLab, pool)),
+            asyncio.ensure_future(stream_handle(LimeKiln, pool))]
         loop.run_until_complete(asyncio.wait(tasks))
     loop.close()
 

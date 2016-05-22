@@ -9,6 +9,7 @@ import os
 from scipy.io import wavfile
 import subprocess
 from subprocess import PIPE, DEVNULL
+from core import Location
 
 
 SECS = "1200"
@@ -16,26 +17,6 @@ LOG = logging.getLogger("aquire_and_align")
 LOG.setLevel(logging.INFO)
 
 MPG123STDERR = b"High Performance"
-
-
-class Location(object):
-    OSL = "orcasoundlab"
-    PTE = "porttownsend"
-    LK = "limekiln"
-    URL = {OSL: "http://208.80.53.110:17636",
-           PTE: "http://sc3.spacialnet.com:16948",
-           LK: "http://ice.stream101.com:8047"}
-    STOP = {OSL: "oslstop",
-            PTE: "ptestop",
-            LK: "lkstop"}
-
-    @classmethod
-    def get_url(self, location):
-        return self.URL[location]
-
-    @classmethod
-    def get_stop_file(self, location):
-        return self.STOP[location]
 
 
 class Recording(object):

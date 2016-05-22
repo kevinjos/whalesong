@@ -7,3 +7,13 @@ Requirements
 * scipy, numpy, scikit-learn
 * streamripper
 * mpg123
+* postgres
+
+Setup for training
+==================
+	$ mkdir -p train/whale/mp3
+	$ bash getorca.sh
+	$ bash mp32wav.sh
+	$ createuser whalesong
+	$ createdb whalesong
+	$ python migratedb.py

@@ -77,7 +77,7 @@ class Migrate(WhaleSongDB):
     @transactional
     def populate_model(self, cur=None):
         cur.execute("""
-        INSERT INTO model (name)
+        INSERT INTO model (filename)
         VALUES (%s);
         """, ('human',))
 

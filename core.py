@@ -1,5 +1,6 @@
 import psycopg2
 from collections import OrderedDict
+import itertools
 import re
 import numpy as np
 from scipy.io import wavfile
@@ -57,6 +58,7 @@ def transactional(f):
 
 class Paths(object):
     TRAIN_DATA = "./train/whale/wav/"
+    MODEL_DATA = "./models/"
 
 
 class Location(object):
@@ -120,8 +122,7 @@ class Model(Table):
     SCHEMA = OrderedDict([("id", "serial"),
                           ("created", "timestamp DEFAULT now()"),
                           ("modified", "timestamp DEFAULT now()"),
-                          ("name", "varchar"),
-                          ("pmml", "xml")])
+                          ("filename", "varchar")])
     NAME = "model"
 
 
@@ -142,6 +143,9 @@ class WhaleSongDB(object):
     USER = "whalesong"
     DBNM = "whalesong"
     TABLES = [Train(), Model(), Rec()]
+
+    def __init__(self):
+        self.__enter__()
 
     def __enter__(self):
         self.conn = psycopg2.connect(database=self.DBNM,
@@ -176,6 +180,24 @@ class TrainService(Train):
         VALUES (%s, %s, %s, %s, %s, %s);
         """, (rec_id, model_id, sample_number, sample_duration, predicted_class, actual_class,))
 
+    @transactional
+    def get_all_rec_ids(self, cur=None):
+        cur.execute("""
+        SELECT distinct rec_id FROM train;
+        """)
+        res = cur.fetchall()
+        res = list(itertools.chain(*res))
+        return res
+
+    @transactional
+    def get_classification_by_model_id_rec_id(self, cur=None, model_id=None, rec_id=None):
+        cur.execute("""
+        SELECT actual_class FROM train WHERE model_id = %s AND rec_id = %s
+        """, (model_id, rec_id,))
+        res = cur.fetchall()
+        res = list(itertools.chain(*res))
+        return res
+
 
 class ModelService(Model):
     def __repr__(self):
@@ -186,9 +208,16 @@ class ModelService(Model):
 
     @transactional
     def get_id_by_model_name(self, cur=None, name=None):
-        cur.execute("SELECT id FROM model WHERE name = %s;", (name,))
+        cur.execute("SELECT id FROM model WHERE filename = %s;", (name,))
         res = cur.fetchone()
         return res[0]
+
+    @transactional
+    def insert_model(self, cur=None, filename=None):
+        cur.execute("""
+        INSERT INTO model (filename)
+        VALUES (%s);
+        """, (filename,))
 
 
 class RecService(Rec):
@@ -203,6 +232,12 @@ class RecService(Rec):
         cur.execute("SELECT id FROM rec WHERE filename = %s", (fn,))
         res = cur.fetchone()
         return res[0]
+
+    @transactional
+    def get_fn_rec_id_by_rec_ids(self, cur=None, ids=None):
+        cur.execute("SELECT filename, id FROM rec WHERE id = ANY(%s);", (ids,))
+        res = cur.fetchall()
+        return res
 
     @transactional
     def get_duration(self, cur=None, rec_id=None):

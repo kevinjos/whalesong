@@ -1,9 +1,11 @@
 .DS_Store
 *.swp
+*.pyc
 /data
 /log
 /OrcaSound\ hydrophone
 /Port\ Townsend\ hydrophone
 /Lime\ Kiln\ hydrophone
 /train
+/models
 /__pycache__

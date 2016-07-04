@@ -216,12 +216,14 @@ def main():
     OrcaSoundLab = Recording(44100, 1, Location.OSL)
     LimeKiln = Recording(22050, 1, Location.LK)
     PortTownsend = Recording(22050, 2, Location.PTE)
+    King = Recording(44100, 1, Location.KING)
 
     loop = asyncio.get_event_loop()
     with Pool(processes=6) as pool:
         tasks = [
             asyncio.ensure_future(stream_handle(PortTownsend, pool)),
             asyncio.ensure_future(stream_handle(OrcaSoundLab, pool)),
+            asyncio.ensure_future(stream_handle(King, pool)),
             asyncio.ensure_future(stream_handle(LimeKiln, pool))]
         loop.run_until_complete(asyncio.wait(tasks))
     loop.close()

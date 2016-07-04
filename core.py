@@ -65,13 +65,16 @@ class Location(object):
     OSL = "orcasoundlab"
     PTE = "porttownsend"
     LK = "limekiln"
+    KING = "king"
     UNKNOWN = "unknown"
     URL = {OSL: "http://208.80.53.110:17636",
            PTE: "http://sc3.spacialnet.com:16948",
-           LK: "http://ice.stream101.com:8047"}
+           LK: "http://ice.stream101.com:8047",
+           KING: "http://echo.pacificwild.org:8000/King"}
     STOP = {OSL: "oslstop",
             PTE: "ptestop",
-            LK: "lkstop"}
+            LK: "lkstop",
+            KING: "kingstop"}
 
     @classmethod
     def get_url(self, location):
@@ -111,8 +114,8 @@ class Train(Table):
                           ("modified", "timestamp DEFAULT now()"),
                           ("rec_id", "int"),
                           ("model_id", "int"),
-                          ("sample_number", "int"),
-                          ("sample_duration", "int"),
+                          ("starttime_ms", "int"),
+                          ("stoptime_ms", "int"),
                           ("predicted_class", "int"),
                           ("actual_class", "int")])
     NAME = "train"
@@ -144,14 +147,16 @@ class WhaleSongDB(object):
     DBNM = "whalesong"
     TABLES = [Train(), Model(), Rec()]
 
-    def __init__(self):
+    def __init__(self, passwd):
+        self.passwd = passwd
         self.__enter__()
 
     def __enter__(self):
         self.conn = psycopg2.connect(database=self.DBNM,
                                      user=self.USER,
                                      host=self.HOST,
-                                     port=self.PORT)
+                                     port=self.PORT,
+                                     password=self.passwd)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -174,11 +179,15 @@ class TrainService(Train):
         self.conn = conn
 
     @transactional
-    def insert_classification(self, cur=None, rec_id=None, model_id=None, sample_number=None, sample_duration=None, predicted_class=None, actual_class=None):
+    def insert_classification(self, cur=None, rec_id=None, model_id=None,
+            starttime_ms=None, stoptime_ms=None, predicted_class=None,
+            actual_class=None):
         cur.execute("""
-        INSERT INTO train (rec_id, model_id, sample_number, sample_duration, predicted_class, actual_class)
+        INSERT INTO train (rec_id, model_id, starttime_ms, stoptime_ms,
+                           predicted_class, actual_class)
         VALUES (%s, %s, %s, %s, %s, %s);
-        """, (rec_id, model_id, sample_number, sample_duration, predicted_class, actual_class,))
+        """, (rec_id, model_id, starttime_ms, stoptime_ms, predicted_class,
+              actual_class,))
 
     @transactional
     def get_all_rec_ids(self, cur=None):
@@ -196,6 +205,15 @@ class TrainService(Train):
         """, (model_id, rec_id,))
         res = cur.fetchall()
         res = list(itertools.chain(*res))
+        return res
+
+    @transactional
+    def get_last_stoptime_by_fn(self, cur=None, fn=None):
+        cur.execute("""
+        SELECT max(train.stoptime_ms) FROM train, rec WHERE train.rec_id = rec.id and rec.filename = %s
+        """, (fn,))
+        res = cur.fetchall()
+        res = res[0][0]
         return res
 
 

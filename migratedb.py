@@ -3,6 +3,7 @@ import datetime as dt
 import os
 from scipy.io import wavfile
 
+from psycopg2 import ProgrammingError
 from core import transactional, WhaleSongDB, Location, Paths
 
 
@@ -25,17 +26,24 @@ def get_duration(fn):
     dur = -1
     try:
         rate, data = wavfile.read(Paths.TRAIN_DATA + fn)
-        dur = len(data) // rate
+        dur = len(data) / rate * 1000
     except Exception:
         print("Failed to read wav for fn=[%s]" % fn)
     return dur
 
 
 class Migrate(WhaleSongDB):
+    def __init__(self, passwd):
+        self.passwd = passwd
+
     @transactional
     def truncate(self, cur):
         for table in self.TABLES:
-            cur.execute("DROP TABLE %s" % table.get_name())
+            try:
+                cur.execute("DROP TABLE %s" % table.get_name())
+            except ProgrammingError as e:
+                print("for table=[%s], exception=[%s]" % (table.get_name(), e))
+                break
 
     @transactional
     def create_tables(self, cur):
@@ -83,7 +91,7 @@ class Migrate(WhaleSongDB):
 
 
 def main():
-    with Migrate() as db:
+    with Migrate(args.passwd) as db:
         if args.all:
             db.truncate()
             db.create_tables()
@@ -111,6 +119,7 @@ def main():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Migrate some data.')
+    parser.add_argument('--passwd', help='dbuser password', default="")
     parser.add_argument('--rec', help='migrate rec table', action='store_true', default=False)
     parser.add_argument('--model', help='migrate model table', action='store_true', default=False)
     parser.add_argument('--train', help='migrate train table', action='store_true', default=False)

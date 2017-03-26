@@ -180,8 +180,8 @@ class TrainService(Train):
 
     @transactional
     def insert_classification(self, cur=None, rec_id=None, model_id=None,
-            starttime_ms=None, stoptime_ms=None, predicted_class=None,
-            actual_class=None):
+                              starttime_ms=None, stoptime_ms=None, predicted_class=None,
+                              actual_class=None):
         cur.execute("""
         INSERT INTO train (rec_id, model_id, starttime_ms, stoptime_ms,
                            predicted_class, actual_class)
@@ -201,10 +201,9 @@ class TrainService(Train):
     @transactional
     def get_classification_by_model_id_rec_id(self, cur=None, model_id=None, rec_id=None):
         cur.execute("""
-        SELECT actual_class FROM train WHERE model_id = %s AND rec_id = %s
+        SELECT starttime_ms, stoptime_ms, actual_class FROM train WHERE model_id = %s AND rec_id = %s
         """, (model_id, rec_id,))
         res = cur.fetchall()
-        res = list(itertools.chain(*res))
         return res
 
     @transactional

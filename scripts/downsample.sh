@@ -1,7 +1,7 @@
 #!/bin/bash
 
-INFILES=./train/whale/wav/*
-OUTDIR=./train/whale/wavds
+INFILES=../train/whale/wav/*
+OUTDIR=../train/whale/wavds
 for f in $INFILES
 do
 	outfile=${f##./*/}
